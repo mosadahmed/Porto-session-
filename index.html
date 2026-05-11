@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>شركة أماكن - Porto session</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Cairo', sans-serif; background: #faf8f5; color: #2d2a26; }
+  .glass { backdrop-filter: blur(10px); background: rgba(255,255,255,0.75); }
+  .snap-x { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+  .snap-center { scroll-snap-align: center; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .soft-shadow { box-shadow: 0 10px 30px rgba(176,137,104,0.08); }
+</style>
+</head>
+<body class="antialiased">
+  <!-- Top Bar -->
+  <header class="fixed top-0 inset-x-0 z-50 glass border-b border-[#ece7df]">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-[#b08968] to-[#7c9885] grid place-items-center text-white font-black">P</div>
+        <div>
+          <h1 class="font-bold leading-none text-[#1f2937]">شركة أماكن - Porto session</h1>
+          <p class="text-xs text-[#7a756e] -mt-0.5">جلسات زفاف وخطوبة</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="pt-20">
+    <!-- Hero -->
+    <section class="max-w-6xl mx-auto px-4">
+      <div class="relative overflow-hidden rounded-[28px] soft-shadow">
+        <picture>
+          <source srcset="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=2000&h=900&fm=webp&q=80" type="image/webp">
+          <img src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=2000&h=900&q=80" alt="Porto Session" class="w-full h-[48vh] md:h-[62vh] object-cover">
+        </picture>
+        <div class="absolute inset-0 bg-gradient-to-t from-[#faf8f5]/90 via-[#faf8f5]/40 to-transparent"></div>
+        <div class="absolute bottom-0 inset-x-0 p-6 md:p-10">
+          <h2 class="text-3xl md:text-5xl font-black leading-tight text-[#2d2a26]">مكانك للصور اللي تفضل ذكرى العمر</h2>
+          <p class="mt-3 text-[#5a544c] max-w-xl">ديكورات هادية، إضاءة طبيعية، وفريق تصوير محترف في كورنيش المعادي.</p>
+          <div class="mt-5 flex gap-3">
+            <a href="#booking" class="bg-[#b08968] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#a07856] shadow">احجز الآن</a>
+            <a href="#packages" class="bg-white border border-[#ece7df] px-6 py-3 rounded-xl text-[#2d2a26] hover:bg-[#f5f1e9]">شوف الباقات</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Packages -->
+    <section id="packages" class="max-w-6xl mx-auto px-4 mt-14">
+      <div class="flex items-end justify-between mb-4">
+        <h3 class="text-2xl md:text-3xl font-extrabold text-[#2d2a26]">🎁 باقات بورتو سيشن</h3>
+        <p class="text-[#7a756e] text-sm">اسحب لليمين واليسار</p>
+      </div>
+      
+      <div class="overflow-x-auto no-scrollbar snap-x -mx-4 px-4">
+        <div class="flex gap-4 md:gap-6 pb-2">
+          <!-- Package 1 -->
+          <article class="snap-center min-w-[300px] md:min-w-[360px] bg-white border border-[#ece7df] rounded-[24px] p-6 soft-shadow hover:border-[#b08968]/40 transition">
+            <div class="text-[#b08968] font-black text-xl">1️⃣ حجز المكان فقط</div>
+            <div class="mt-3 text-3xl font-black text-[#2d2a26]">800 <span class="text-lg font-semibold">جنيه</span></div>
+            <ul class="mt-4 space-y-2 text-[#4b453e] text-sm leading-7">
+              <li>✔️ تشمل العروسين + المصور الخاص بك + المساعد</li>
+              <li>👤 الفرد الإضافي: 50 جنيه فقط</li>
+              <li>✅ وقت تصوير مفتوح للزفاف أو الخطوبة</li>
+            </ul>
+            <button data-package="حجز المكان فقط - 800 جنيه" class="choose-package mt-6 w-full bg-[#f5f1e9] hover:bg-[#ede5d6] text-[#2d2a26] py-3 rounded-xl font-bold border border-[#ece7df]">اختر الباقة</button>
+          </article>
+
+          <!-- Package 2 -->
+          <article class="snap-center min-w-[300px] md:min-w-[360px] bg-white border border-[#ece7df] rounded-[24px] p-6 soft-shadow hover:border-[#b08968]/40 transition">
+            <div class="text-[#b08968] font-black text-xl">2️⃣ باقة الـ Digital</div>
+            <div class="mt-3 text-3xl font-black">2400 <span class="text-lg font-semibold">جنيه</span></div>
+            <ul class="mt-4 space-y-2 text-[#4b453e] text-sm leading-7">
+              <li>✅ حجز المكان + مصور من فريقنا الخاص</li>
+              <li>✅ حوالي ساعة لغاية المصور ما يخلص</li>
+              <li>✅ استلام كل الصور ديجيتال بجودة فائقة (High Re)</li>
+            </ul>
+            <button data-package="باقة Digital - 2400 جنيه" class="choose-package mt-6 w-full bg-[#f5f1e9] hover:bg-[#ede5d6] text-[#2d2a26] py-3 rounded-xl font-bold border border-[#ece7df]">اختر الباقة</button>
+          </article>
+
+          <!-- Package 3 -->
+          <article class="snap-center min-w-[300px] md:min-w-[360px] bg-white border-2 border-[#b08968] rounded-[24px] p-6 soft-shadow relative">
+            <div class="absolute -top-3 -left-3 bg-[#b08968] text-white text-xs font-black px-3 py-1 rounded-full">الأكثر طلباً</div>
+            <div class="text-[#b08968] font-black text-xl">3️⃣ باقة الـ Printing</div>
+            <div class="mt-3 text-3xl font-black">2800 <span class="text-lg font-semibold">جنيه</span></div>
+            <ul class="mt-4 space-y-2 text-[#4b453e] text-sm leading-7">
+              <li>✅ مصور محترف من فريقنا داخل اللوكيشن</li>
+              <li>✅ حوالي ساعة لغاية المصور ما يخلص</li>
+              <li>✅ استلام كل الصور ديجيتال بجودة فائقة</li>
+              <li>✅ ألبوم صور</li>
+              <li>✅ تابلوه خشب هدية</li>
+            </ul>
+            <button data-package="باقة Printing - 2800 جنيه" class="choose-package mt-6 w-full bg-[#b08968] text-white hover:bg-[#a07856] py-3 rounded-xl font-black shadow">اختر الباقة</button>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Gallery -->
+    <section class="max-w-6xl mx-auto px-4 mt-16">
+      <h3 class="text-2xl md:text-3xl font-extrabold mb-4 text-[#2d2a26]">جاليري</h3>
+      <div class="overflow-x-auto no-scrollbar snap-x -mx-4 px-4">
+        <div class="flex gap-3">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 1">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1522673607200-164d1b6ce486?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 2">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 3">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 4">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1507504031003-6e3239c3f96b?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 5">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 6">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 7">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1474552226712-ac0ca2f8cc7b?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 8">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 9">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1494774157365-9e04c6720e47?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 10">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1502635385003-ee1e6a1a742d?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 11">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1546032996-6dfacbacbf3f?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 12">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1550005809-0386f9e1c156?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 13">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1537633552985-df8429e8048b?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 14">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1591604466107-ec97de577aff?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 15">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1606800052052-a08af7148866?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 16">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 17">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 18">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1469371670807-013ccf25f16a?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 19">
+          <img class="snap-center h-48 w-72 object-cover rounded-2xl border border-[#ece7df] bg-white" loading="lazy" src="https://images.unsplash.com/photo-1510076857177-7470076d4098?auto=format&fit=crop&w=800&h=600&fm=webp&q=80" alt="gallery 20">
+        </div>
+      </div>
+      <p class="text-xs text-[#9a9187] mt-2">صور webp مؤقتة بنفس المقاس — استبدل الروابط بصورك لاحقاً</p>
+    </section>
+
+    <!-- Booking -->
+    <section id="booking" class="max-w-6xl mx-auto px-4 mt-16">
+      <div class="grid md:grid-cols-5 gap-6">
+        <div class="md:col-span-3 bg-white border border-[#ece7df] rounded-[28px] p-6 md:p-8 soft-shadow">
+          <h3 class="text-2xl font-extrabold text-[#2d2a26]">نموذج الحجز</h3>
+          <p class="text-[#7a756e] text-sm mt-1">املأ البيانات وهنفتح لك واتساب للتأكيد فوراً</p>
+          
+          <form id="bookingForm" class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="text-sm text-[#5a544c]">الاسم</label>
+              <input name="name" required class="mt-1 w-full bg-[#fcfaf7] border border-[#e5dfd5] rounded-xl px-4 py-3 outline-none focus:border-[#b08968]" placeholder="اسمك الثلاثي">
+            </div>
+            <div>
+              <label class="text-sm text-[#5a544c]">رقم واتساب</label>
+              <input name="whatsapp" required type="tel" class="mt-1 w-full bg-[#fcfaf7] border border-[#e5dfd5] rounded-xl px-4 py-3 outline-none focus:border-[#b08968]" placeholder="01xxxxxxxxx">
+            </div>
+            <div>
+              <label class="text-sm text-[#5a544c]">التاريخ</label>
+              <input name="date" required type="date" class="mt-1 w-full bg-[#fcfaf7] border border-[#e5dfd5] rounded-xl px-4 py-3 outline-none focus:border-[#b08968]">
+            </div>
+            <div>
+              <label class="text-sm text-[#5a544c]">الساعة (9 صباحاً - 10 مساءً)</label>
+              <select name="time" required class="mt-1 w-full bg-[#fcfaf7] border border-[#e5dfd5] rounded-xl px-4 py-3 outline-none focus:border-[#b08968]">
+                <option value="" disabled selected>اختار الوقت</option>
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-sm text-[#5a544c]">الباقة</label>
+              <select name="package" id="packageSelect" required class="mt-1 w-full bg-[#fcfaf7] border border-[#e5dfd5] rounded-xl px-4 py-3 outline-none focus:border-[#b08968]">
+                <option>حجز المكان فقط - 800 جنيه</option>
+                <option>باقة Digital - 2400 جنيه</option>
+                <option>باقة Printing - 2800 جنيه</option>
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-sm text-[#5a544c]">ملاحظات اختيارية</label>
+              <textarea name="notes" rows="3" class="mt-1 w-full bg-[#fcfaf7] border border-[#e5dfd5] rounded-xl px-4 py-3 outline-none focus:border-[#b08968]" placeholder="أي تفاصيل إضافية..."></textarea>
+            </div>
+            <div class="md:col-span-2 flex flex-col md:flex-row gap-3 mt-2">
+              <button type="submit" class="flex-1 bg-[#b08968] text-white font-black py-3 rounded-xl hover:bg-[#a07856] shadow">تأكيد الحجز</button>
+            </div>
+          </form>
+          <div id="success" class="hidden mt-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm">تم إرسال بياناتك! فتحنا واتساب للتأكيد، وهنبعت نسخة على الإيميل.</div>
+          <p class="text-xs text-[#9a9187] mt-4">متاح لأي عدد من الحجوزات في نفس الوقت — لدينا عدد كبير من المصورين والديكورات.</p>
+        </div>
+
+        <div class="md:col-span-2 space-y-4">
+          <div class="bg-white border border-[#ece7df] rounded-[28px] p-6 soft-shadow">
+            <h4 class="font-bold text-lg text-[#2d2a26]">📍 العنوان</h4>
+            <p class="mt-2 text-[#4b453e] leading-7">كورنيش المعادي - أمام أكاديمية طيبة - أسفل كوبري السلام بجوار مسجد الحق.</p>
+            <div class="mt-4 overflow-hidden rounded-xl border border-[#ece7df]">
+              <iframe src="https://www.google.com/maps?q=29.9808125,31.2313906&z=17&output=embed" width="100%" height="220" style="border:0;" allowfullscreen loading="lazy"></iframe>
+            </div>
+            <a href="https://maps.google.com/?q=29.9808125,31.2313906" target="_blank" class="mt-3 inline-block text-[#b08968] text-sm font-bold">افتح في خرائط جوجل ↗</a>
+          </div>
+          <div class="bg-white border border-[#ece7df] rounded-[28px] p-6 soft-shadow">
+            <h4 class="font-bold text-lg text-[#2d2a26]">مواعيد العمل</h4>
+            <p class="mt-2 text-[#4b453e]">المكان مفتوح 24 ساعة بالحجز المسبق. أفضل إضاءة: قبل المغرب بساعتين.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="max-w-6xl mx-auto px-4 mt-16">
+      <h3 class="text-2xl md:text-3xl font-extrabold mb-4 text-[#2d2a26]">الأسئلة الشائعة</h3>
+      <div class="space-y-3" id="faq">
+        <details class="bg-white border border-[#ece7df] rounded-2xl p-5 soft-shadow">
+          <summary class="font-bold cursor-pointer text-[#2d2a26]">عنوان المكان فين؟</summary>
+          <p class="mt-2 text-[#5a544c]">كورنيش المعادي - أمام أكاديمية طيبة - أسفل كوبري السلام بجوار مسجد الحق.</p>
+        </details>
+        <details class="bg-white border border-[#ece7df] rounded-2xl p-5 soft-shadow">
+          <summary class="font-bold cursor-pointer">كم رسوم حجز المكان فقط للزفاف او الخطوبة؟</summary>
+          <p class="mt-2 text-[#5a544c]">800 جنيه تشمل دخول العرايس والمصور تبعكم والمساعد، والفرد الإضافي 50ج.</p>
+        </details>
+        <details class="bg-white border border-[#ece7df] rounded-2xl p-5 soft-shadow">
+          <summary class="font-bold cursor-pointer">ما هى افضل أوقات التصوير؟</summary>
+          <p class="mt-2 text-[#5a544c]">قبل المغرب بساعتين (الشمس الذهبية) بتدي أفضل إضاءة طبيعية للصور.</p>
+        </details>
+        <details class="bg-white border border-[#ece7df] rounded-2xl p-5 soft-shadow">
+          <summary class="font-bold cursor-pointer">ما هى مواعيد العمل الرسمية؟</summary>
+          <p class="mt-2 text-[#5a544c]">المكان مفتوح 24 ساعة. احجز التاريخ وتعالى الوقت اللي يناسبك.</p>
+        </details>
+        <details class="bg-white border border-[#ece7df] rounded-2xl p-5 soft-shadow">
+          <summary class="font-bold cursor-pointer">كم من الوقت تستغرق جلسة التصوير؟</summary>
+          <p class="mt-2 text-[#5a544c]">الوقت مفتوح لغاية المصور ما يخلص، مفيش وقت محدد لجلسات حجز المكان للزفاف او الخطوبه.</p>
+        </details>
+        <details class="bg-white border border-[#ece7df] rounded-2xl p-5 soft-shadow">
+          <summary class="font-bold cursor-pointer">احجز ازاى؟</summary>
+          <p class="mt-2 text-[#5a544c]">ممكن تشرفونا بزيارة المكان، أو الحجز بسهولة عبر محفظة فودافون كاش، أو من خلال النموذج هنا.</p>
+        </details>
+        <details class="bg-white border border-[#ece7df] rounded-2xl p-5 soft-shadow">
+          <summary class="font-bold cursor-pointer">ما هي سياسة الإلغاء؟</summary>
+          <p class="mt-2 text-[#5a544c]">تقدر تسترد المبلغ كامل لو لغيت قبل الميعاد بأسبوعين (14 يومًا).</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="mt-20 border-t border-[#ece7df] bg-white/60">
+    <div class="max-w-6xl mx-auto px-4 py-8 text-center text-[#7a756e] text-sm">
+      © 2026 شركة أماكن - Porto session. جميع الحقوق محفوظة
+    </div>
+  </footer>
+
+<script>
+  const WHATSAPP_NUMBER = '201060204444';
+  const WHATSAPP_INTRO = 'سلامو عليك، مزيد من تفاصيل باقات Porto session؟';
+
+  // Populate time select 9:00 - 22:00
+  const timeSelect = document.querySelector('select[name="time"]');
+  for(let h=9; h<=22; h++){
+    const hh = String(h).padStart(2,'0');
+    ['00','30'].forEach(m=>{
+      if(h===22 && m==='30') return;
+      const opt = document.createElement('option');
+      opt.value = `${hh}:${m}`;
+      opt.textContent = `${h>12?h-12:h}:${m} ${h<12?'صباحاً':h===12?'ظهراً':'مساءً'}`;
+      timeSelect.appendChild(opt);
+    });
+  }
+
+  // Package buttons
+  document.querySelectorAll('.choose-package').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.getElementById('packageSelect').value = btn.dataset.package;
+      document.getElementById('booking').scrollIntoView({behavior:'smooth'});
+    });
+  });
+
+  // Form submit
+  document.getElementById('bookingForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    const data = {
+      الاسم: f.name.value.trim(),
+      التاريخ: f.date.value,
+      الساعة: f.time.value,
+      'رقم واتساب العميل': f.whatsapp.value.trim(),
+      الباقة: f.package.value,
+      ملاحظات: f.notes.value.trim()
+    };
+
+    // 1) Send to email via FormSubmit AJAX
+    try{
+      await fetch('https://formsubmit.co/ajax/mosaadahmed133@icloud.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          ...data,
+          _subject: 'حجز جديد - Porto Session',
+          _captcha: 'false',
+          _template: 'table'
+        })
+      });
+    }catch(err){ console.log('Email error', err); }
+
+    // 2) Open WhatsApp with booking details to NEW number
+    const msg = `حجز جديد Porto Session%0A%0A• الاسم: ${encodeURIComponent(data.الاسم)}%0A• التاريخ: ${data.التاريخ}%0A• الساعة: ${data.الساعة}%0A• الباقة: ${encodeURIComponent(data.الباقة)}%0A• واتساب العميل: ${data['رقم واتساب العميل']}%0A• ملاحظات: ${encodeURIComponent(data.ملاحظات||'-')}`;
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
+
+    document.getElementById('success').classList.remove('hidden');
+    f.reset();
+  });
+</script>
+</body>
+</html>
